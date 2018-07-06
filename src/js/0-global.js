@@ -4,6 +4,7 @@ var variants = [];
 var lookup = {};
 var i = 0;
 var variant = getQueryByName('variant');
+var type = getQueryByName('type');
 var variantSelector = document.getElementById('variant-selector');
 var platformSelector = document.getElementById('platform-selector');
 
@@ -171,6 +172,37 @@ function loadJSON(repo, filename, callback) {
   xobj.send(null);
 }
 
+
+function loadReleaseInfo(repo, callback) {
+  var url = ('https://api.github.com/repos/AdoptOpenJDK/' + repo + '/releases'); // the URL of the JSON built in the website back-end
+
+  var xobj = new XMLHttpRequest();
+  xobj.open('GET', url, true);
+  xobj.onreadystatechange = function () {
+    if (xobj.readyState == 4 && xobj.status == '200') { // if the status is 'ok', run the callback function that has been passed in.
+      callback(xobj.responseText);
+    } else if (
+      xobj.status != '200' && // if the status is NOT 'ok', remove the loading dots, and display an error:
+      xobj.status != '0') { // for IE a cross domain request has status 0, we're going to execute this block fist, than the above as well.
+      if (filename !== 'jck') {
+        if (xobj.status == '404') {
+          var url_string = window.location.href;
+          var url = new URL(url_string);
+          var variant = url.searchParams.get('variant');
+          document.getElementById('error-container').innerHTML = '<p>There are no releases available for ' + variant + '. Please check our <a href=nightly.html?variant=' + variant + ' target=\'blank\'>Nightly Builds</a>.</p>';
+        } else {
+          document.getElementById('error-container').innerHTML = '<p>Error... there\'s a problem fetching the releases. Please see the <a href=\'https://github.com/AdoptOpenJDK/openjdk-' + repo + '/releases\' target=\'blank\'>releases list on GitHub</a>.</p>';
+        }
+        loading.innerHTML = '';
+      } else {
+        loading.innerHTML = '';
+        callback(null)
+      }
+    }
+  };
+  xobj.send(null);
+}
+
 function loadPlatformsThenData(callback) {
   loadJSON('adoptopenjdk.net', './dist/json/config.json', function(response) {
     var configJson = JSON.parse(response);
@@ -222,13 +254,18 @@ function setTickLink() {
   }
 }
 
-function setUrlQuery(name, newValue) {
-  if(window.location.search.indexOf(name) >= 0) {
-    var currentValue = getQueryByName(name);
-    window.location.search = window.location.search.replace(currentValue, newValue);
-  }
-  else {
-    window.location.search += (name + '=' + newValue);
+function setUrlQuery() {
+  for(var i=0;i<arguments.length;i=i+2) {
+    var name=arguments[i];
+    var newValue=arguments[i+1];
+
+    if (window.location.search.indexOf(name) >= 0) {
+      var currentValue = getQueryByName(name);
+      window.location.search = window.location.search.replace(currentValue, newValue);
+    }
+    else {
+      window.location.search += (name + '=' + newValue);
+    }
   }
 }
 
@@ -297,7 +334,10 @@ function setVariantSelector() {
     }
 
     variantSelector.onchange = function() {
-      setUrlQuery('variant', variantSelector.value);
+      const matches = variantSelector.value.match(/(openjdk\d+)(-openj9)?/);
+      const versionNumber = matches[0];
+      const isOpenJ9 = matches.length>1;
+      setUrlQuery('variant', versionNumber, 'type', isOpenJ9);
     };
   }
 }
